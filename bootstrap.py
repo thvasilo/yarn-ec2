@@ -42,20 +42,23 @@ master_r_packages = [
 ]
 
 # download link of hadoop.
-hadoop_url = 'http://apache.claz.org/hadoop/common/hadoop-2.8.0/hadoop-2.8.0.tar.gz'
-hadoop_dir = 'hadoop-2.8.0'
+hadoop_dir = 'hadoop-2.8.4'
+hadoop_url = 'https://www.apache.org/dyn/mirrors/mirrors.cgi?action=download' \
+             f'&filename=hadoop/common/{hadoop_dir}/{hadoop_dir}.tar.gz'
+
 
 # customized installation script.
 # See optional installation scripts for options.
 def custom_master_install():
-    #install_spark()
-    #install_r()
+    # install_spark()
+    # install_r()
     pass
+
 
 # customized installation script for all nodes.
 def custom_all_nodes_install():
-    install_gcc()
     pass
+
 
 ###---------------------------------------------------##
 #  Automatically set by script                        #
@@ -64,8 +67,8 @@ USER_NAME = 'ubuntu'
 # setup variables
 MASTER = os.getenv('MY_MASTER_DNS', '')
 # node type the type of current node
-NODE_TYPE = os.getenv('MY_NODE_TYPE', 'm3.xlarge')
-NODE_VMEM = int(os.getenv('MY_NODE_VMEM', str(1024*15)))
+NODE_TYPE = os.getenv('MY_NODE_TYPE', 'c3.2xlarge')  # (thvasilo): Think this is a circular definition...
+NODE_VMEM = int(os.getenv('MY_NODE_VMEM', str(1024 * 15)))
 NODE_VCPU = int(os.getenv('MY_NODE_VCPU', '4'))
 AWS_ID = os.getenv('AWS_ACCESS_KEY_ID', 'undefined')
 AWS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'undefined')
@@ -74,6 +77,7 @@ HADOOP_HOME = os.getenv('HADOOP_HOME')
 DISK_LIST = [('xvd' + chr(ord('b') + i)) for i in range(10)]
 ENVIRON = os.environ.copy()
 
+
 ###--------------------------------##
 #  Optional installation scripts.  #
 ###--------------------------------##
@@ -81,8 +85,8 @@ def install_r():
     if master_r_packages:
         sudo("apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E084DAB9")
         sudo("echo deb https://cran.r-project.org/bin/linux/ubuntu trusty/ >>/etc/apt/sources.list")
-        sudo('apt-get -y update')
-        sudo('apt-get -y install %s' % (' '.join(master_r_packages)))
+        sudo('apt -y update')
+        sudo('apt -y install %s' % (' '.join(master_r_packages)))
 
 
 def install_spark():
@@ -97,40 +101,38 @@ def install_xgboost():
     run('git clone --recursive https://github.com/dmlc/xgboost')
     run('cd xgboost; cp make/config.mk .; echo USE_S3=1 >> config.mk; make -j4')
 
-### Script section ###
+
+# Script section
 def run(cmd):
     try:
-        print cmd
+        print(cmd)
         logging.info(cmd)
-        proc = subprocess.Popen(cmd, shell=True, env = ENVIRON,
-                                stdout=subprocess.PIPE, stderr = subprocess.PIPE)
+        proc = subprocess.Popen(cmd, shell=True, env=ENVIRON,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = proc.communicate()
         retcode = proc.poll()
         if retcode != 0:
-            logging.error('Command %s returns %d' % (cmd,retcode))
+            logging.error('Command %s returns %d' % (cmd, retcode))
             logging.error(out)
             logging.error(err)
         else:
-            print out
+            print(out)
     except Exception as e:
-        print(str(e))
+        print((str(e)))
         logging.error('Exception running: %s' % cmd)
         logging.error(str(e))
         pass
 
+
 def sudo(cmd):
     run('sudo %s' % cmd)
 
-### Installation helpers ###
-def install_packages(pkgs):
-    sudo('apt-get -y update')
-    sudo('apt-get -y install %s' % (' '.join(pkgs)))
 
-# install g++4.9, needed for regex match.
-def install_gcc():
-    sudo('add-apt-repository -y ppa:ubuntu-toolchain-r/test')
-    sudo('apt-get -y update')
-    sudo('apt-get -y install g++-4.9')
+# Installation helpers
+def install_packages(pkgs):
+    sudo('apt -y update')
+    sudo('apt -y install %s' % (' '.join(pkgs)))
+
 
 def install_java():
     """
@@ -138,9 +140,9 @@ def install_java():
     Returns environment variables that needs to be exported
     """
     if not os.path.exists('jdk1.8.0_131'):
-        run('wget --no-check-certificate --no-cookies'\
-                ' --header \"Cookie: oraclelicense=accept-securebackup-cookie\"'\
-                ' http://download.oracle.com/otn-pub/java/jdk/8u131-b11/d54c1d3a095b4ff2b6607d096fa80163/jdk-8u131-linux-x64.tar.gz')
+        run('wget --no-check-certificate --no-cookies'
+            ' --header \"Cookie: oraclelicense=accept-securebackup-cookie\"'
+            ' http://download.oracle.com/otn-pub/java/jdk/8u131-b11/d54c1d3a095b4ff2b6607d096fa80163/jdk-8u131-linux-x64.tar.gz')
         run('tar xf jdk-8u131-linux-x64.tar.gz')
         run('rm -f jdk-8u131-linux-x64.tar.gz')
     global JAVA_HOME
@@ -168,7 +170,7 @@ def install_hadoop(is_master):
             if name in rmap:
                 prop['value'].text = str(rmap[name])
                 rset.add(name)
-        for name, text in rmap.iteritems():
+        for name, text in rmap.items():
             if name in rset:
                 continue
             prop = ElementTree.SubElement(root, 'property')
@@ -197,7 +199,7 @@ def install_hadoop(is_master):
             reserved_ram = 256
         elif vmem < 8 * 1024:
             reserved_ram = 1 * 1024
-        elif vmem < 24 * 1024 :
+        elif vmem < 24 * 1024:
             reserved_ram = 2 * 1024
         elif vmem < 48 * 1024:
             reserved_ram = 2 * 1024
@@ -247,9 +249,9 @@ def install_hadoop(is_master):
         }
         update_site('%s/etc/hadoop/yarn-site.xml' % HADOOP_HOME, yarn_site)
         mapred_site = {
-            'mapreduce.application.classpath' : ':'.join(['$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*',
-                                                          '$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*',
-                                                          '$HADOOP_MAPRED_HOME/share/hadoop/tools/lib/*']),
+            'mapreduce.application.classpath': ':'.join(['$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*',
+                                                         '$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*',
+                                                         '$HADOOP_MAPRED_HOME/share/hadoop/tools/lib/*']),
             'yarn.app.mapreduce.am.resource.mb': 2 * ram_per_container,
             'yarn.app.mapreduce.am.command-opts': '-Xmx%dm' % int(0.8 * 2 * ram_per_container),
             'mapreduce.framework.name': 'yarn',
@@ -276,13 +278,13 @@ def install_hadoop(is_master):
         fo.close()
 
     def run_install():
-        if not os.path.exists('hadoop-2.8.0'):
-            run('wget %s' % hadoop_url)
-            run('tar xf hadoop-2.8.0.tar.gz')
-            run('rm -f hadoop-2.8.0.tar.gz')
+        if not os.path.exists(hadoop_dir):
+            run(f'wget --trust-server-names \"{hadoop_url}\"')
+            run(f'tar xf {hadoop_dir}.tar.gz')
+            run(f'rm -f {hadoop_dir}.tar.gz')
             global HADOOP_HOME
         if HADOOP_HOME is None:
-            HADOOP_HOME = os.path.abspath('hadoop-2.8.0')
+            HADOOP_HOME = os.path.abspath(hadoop_dir)
         env = [('HADOOP_HOME', HADOOP_HOME)]
         env += [('HADOOP_PREFIX', HADOOP_HOME)]
         env += [('HADOOP_MAPRED_HOME', HADOOP_HOME)]
@@ -300,6 +302,7 @@ def install_hadoop(is_master):
 
     return run_install()
 
+
 def regsshkey(fname):
     for dns in (open(fname).readlines() + ['localhost', '0.0.0.0']):
         try:
@@ -307,6 +310,7 @@ def regsshkey(fname):
         except:
             pass
         run('ssh-keyscan %s >> ~/.ssh/known_hosts' % dns.strip())
+
 
 # main script to install all dependencies
 def install_main(is_master):
@@ -334,7 +338,7 @@ def install_main(is_master):
     # setup environments
     fo = open('.hadoop_env', 'w')
     for k, v in env:
-        fo.write('export %s=%s\n' % (k,v))
+        fo.write('export %s=%s\n' % (k, v))
         ENVIRON[k] = v
     fo.write('export PATH=$PATH:%s\n' % (':'.join(path)))
     fo.write('export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib\n')
@@ -353,7 +357,8 @@ def install_main(is_master):
     regsshkey('%s/etc/hadoop/slaves' % HADOOP_HOME)
     # end of instalation.
 
-# Make startup script for bulding
+
+# Make startup script for building
 def make_startup_script(is_master):
     assert JAVA_HOME is not None
     assert HADOOP_HOME is not None
@@ -374,9 +379,9 @@ def make_startup_script(is_master):
             disks.append('/disk/%s' % d)
 
     for d in disks:
-        cmds.append('sudo mkdir -p %s/hadoop' %d)
+        cmds.append('sudo mkdir -p %s/hadoop' % d)
         cmds.append('sudo chown ubuntu:ubuntu %s/hadoop' % d)
-        cmds.append('sudo mkdir -p %s/tmp' %d)
+        cmds.append('sudo mkdir -p %s/tmp' % d)
         cmds.append('sudo chown ubuntu:ubuntu %s/tmp' % d)
         cmds.append('rm -rf %s/hadoop/dfs' % d)
         cmds.append('mkdir %s/hadoop/dfs' % d)
@@ -388,19 +393,19 @@ def make_startup_script(is_master):
         cmds.append('$HADOOP_HOME/bin/hadoop namenode -format')
         cmds.append('$HADOOP_HOME/sbin/start-all.sh')
     else:
-        cmds.append('export HADOOP_LIBEXEC_DIR=$HADOOP_HOME/libexec &&'\
-                ' $HADOOP_HOME/sbin/yarn-daemon.sh --config $HADOOP_HOME/etc/hadoop start nodemanager')
+        cmds.append('export HADOOP_LIBEXEC_DIR=$HADOOP_HOME/libexec &&'
+                    ' $HADOOP_HOME/sbin/yarn-daemon.sh --config $HADOOP_HOME/etc/hadoop start nodemanager')
     with open('startup.sh', 'w') as fo:
         fo.write('#!/bin/bash\n')
         fo.write('set -v\n')
         fo.write('\n'.join(cmds))
     run('chmod +x startup.sh')
-    run('./startup.sh')
+    run('./startup.sh > startup.log')
 
 
 def main():
     global MASTER
-    logging.basicConfig(filename = 'bootstrap.log', level = logging.INFO,
+    logging.basicConfig(filename='bootstrap.log', level=logging.INFO,
                         format='%(asctime)s %(levelname)s %(message)s')
     if MASTER == '':
         is_master = True
@@ -419,8 +424,9 @@ def main():
     if is_master:
         custom_master_install()
     custom_all_nodes_install()
-    logging.info('boostrap finishes in %g secs' % (tend - tmid))
-    logging.info('all finishes in %g secs' % (tend - tstart))
+    logging.info('boostrap finished in %g secs' % (tend - tmid))
+    logging.info('all finished in %g secs' % (tend - tstart))
+
 
 if __name__ == '__main__':
     pw_record = pwd.getpwnam(USER_NAME)

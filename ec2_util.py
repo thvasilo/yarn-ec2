@@ -69,8 +69,8 @@ def get_num_disks(instance):
     if instance in disks_by_instance:
         return disks_by_instance[instance]
     else:
-        print >> sys.stderr, ("WARNING: Don't know number of disks on instance type %s; assuming 1"
-                              % instance)
+        print(("WARNING: Don't know number of disks on instance type %s; assuming 1"
+                              % instance), file=sys.stderr)
         return 1
 
 def get_instance_type(instance):
@@ -118,8 +118,7 @@ def get_instance_type(instance):
     if instance in instance_types:
         return instance_types[instance]
     else:
-        print >> sys.stderr,\
-            "Don't recognize %s, assuming type is pvm" % instance
+        print("Don't recognize %s, assuming type is pvm" % instance, file=sys.stderr)
         return 'pvm'
 
 # Wait for a set of launched instances to exit the "pending" state
@@ -144,9 +143,9 @@ def get_or_make_group(conn, name, make_if_not_exist = True):
         return group[0]
     else:
         if not make_if_not_exist:
-            print >> sys.stderr, "ERROR: Could not find any existing security group"
+            print("ERROR: Could not find any existing security group", file=sys.stderr)
             sys.exit(1)
-        print "Creating security group " + name
+        print("Creating security group " + name)
         return conn.create_security_group(name, "MODE EC2 group")
 
 # Check whether a given EC2 instance object is in a state we consider active,
@@ -172,7 +171,7 @@ def get_block_device(instance_type, ebs_vol_size):
         dev = BlockDeviceType()
         dev.ephemeral_name = 'ephemeral%d' % i
         # The first ephemeral drive is /dev/sdb.
-        name = '/dev/sd' + string.letters[i + 1]
+        name = '/dev/sd' + string.ascii_letters[i + 1]
         block_map[name] = dev
 
     return block_map
@@ -181,7 +180,7 @@ def get_block_device(instance_type, ebs_vol_size):
 # Get the EC2 instances in an existing cluster if available.
 # Returns a tuple of lists of EC2 instance objects for the masters and slaves
 def get_existing_cluster(conn, cluster_name, die_on_error=True):
-    print "Searching for existing cluster " + cluster_name + "..."
+    print("Searching for existing cluster " + cluster_name + "...")
     reservations = conn.get_all_instances()
     master_nodes = []
     slave_nodes = []
@@ -194,12 +193,12 @@ def get_existing_cluster(conn, cluster_name, die_on_error=True):
             elif group_names == [cluster_name + "-slaves"]:
                 slave_nodes.append(inst)
     if any((master_nodes, slave_nodes)):
-        print ("Found %d master(s), %d slaves" % (len(master_nodes), len(slave_nodes)))
+        print(("Found %d master(s), %d slaves" % (len(master_nodes), len(slave_nodes))))
     if master_nodes != [] or not die_on_error:
         return (master_nodes, slave_nodes)
     else:
         if master_nodes == [] and slave_nodes != []:
-            print >> sys.stderr, "ERROR: Could not find master in group " + cluster_name + "-master"
+            print("ERROR: Could not find master in group " + cluster_name + "-master", file=sys.stderr)
         else:
-            print >> sys.stderr, "ERROR: Could not find any existing cluster"
+            print("ERROR: Could not find any existing cluster", file=sys.stderr)
         sys.exit(1)

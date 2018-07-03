@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import pipes
 import logging
 import os
 import random
@@ -38,7 +39,7 @@ def parse_args():
         help="SSH private key file to use for logging into instances")
     parser.add_option(
         "-t", "--instance-type", default="c3.2xlarge",
-        help="Type of instance to launch (default: m3.xlarge). " +
+        help="Type of instance to launch (default: c3.2xlarge). " +
              "WARNING: must be 64-bit; small instances won't work")
     parser.add_option(
         "-r", "--region", default="us-west-2",
@@ -77,12 +78,12 @@ def parse_args():
     if home_dir is None or not os.path.isfile(home_dir + '/.boto'):
         if not os.path.isfile('/etc/boto.cfg'):
             if os.getenv('AWS_ACCESS_KEY_ID') is None:
-                print >> stderr, ("ERROR: The environment variable AWS_ACCESS_KEY_ID " +
-                                  "must be set")
+                print(("ERROR: The environment variable AWS_ACCESS_KEY_ID " +
+                                  "must be set"), file=stderr)
                 sys.exit(1)
             if os.getenv('AWS_SECRET_ACCESS_KEY') is None:
-                print >> stderr, ("ERROR: The environment variable AWS_SECRET_ACCESS_KEY " +
-                                  "must be set")
+                print(("ERROR: The environment variable AWS_SECRET_ACCESS_KEY " +
+                                  "must be set"), file=stderr)
                 sys.exit(1)
     return opts
 
@@ -108,7 +109,7 @@ def get_user_data(fname, master_dns, instance_type, include_aws_key):
     data = open(fname).readlines()
     ret = []
     if include_aws_key:
-        print "include AWS key option is switched on..."
+        print("include AWS key option is switched on...")
 
     for l in data:
         special = True
@@ -134,10 +135,11 @@ def get_user_data(fname, master_dns, instance_type, include_aws_key):
 # use ubuntu machines
 def get_ami(instance):
     itype = ec2_util.get_instance_type(instance)
+    # These are the 16.04 images for us-west-2 according to https://cloud-images.ubuntu.com/locator/ec2/
     if itype == 'pvm':
-        return 'ami-6989a659'
+        return 'ami-fb5d1683'
     else:
-        return 'ami-5189a661'
+        return 'ami-ba602bc2'
 
 # Launch master of a cluster of the given name, by setting up its security groups,
 # and then starting new instances in them.
@@ -146,13 +148,13 @@ def get_ami(instance):
 def launch_master(conn, opts):
     cluster_name = opts.cluster_name
     if opts.identity_file is None:
-        print >> stderr, "ERROR: Must provide an identity file (-i) for ssh connections."
+        print("ERROR: Must provide an identity file (-i) for ssh connections.", file=stderr)
         sys.exit(1)
     if opts.key_pair is None:
-        print >> stderr, "ERROR: Must provide a key pair name (-k) to use on instances."
+        print("ERROR: Must provide a key pair name (-k) to use on instances.", file=stderr)
         sys.exit(1)
 
-    print "Setting up security groups..."
+    print("Setting up security groups...")
     master_group = ec2_util.get_or_make_group(conn, cluster_name + "-master")
     slave_group = ec2_util.get_or_make_group(conn, cluster_name + "-slave")
     if master_group.rules == []:  # Group was just now created
@@ -183,23 +185,23 @@ def launch_master(conn, opts):
     existing_masters, existing_slaves = ec2_util.get_existing_cluster(conn, cluster_name,
                                                                       die_on_error=False)
     if existing_slaves:
-        print >> stderr, ("ERROR: There are already instances running in " +
-                          "group %s or %s" % (group.name, slave_group.name))
+        print(("ERROR: There are already instances running in " +
+                          "group %s or %s" % (master_group.name, slave_group.name)), file=stderr)
         sys.exit(1)
 
     if opts.ami is None:
         opts.ami = get_ami(opts.instance_type)
-    print "Launching instances..."
+    print("Launching instances...")
 
     try:
         image = conn.get_all_images(image_ids=[opts.ami])[0]
     except:
-        print >> stderr, "Could not find AMI " + opts.ami
+        print("Could not find AMI " + opts.ami, file=stderr)
         sys.exit(1)
 
     # Launch or resume masters
     if existing_masters:
-        print "Starting master..."
+        print("Starting master...")
         for inst in existing_masters:
             if inst.state not in ["shutting-down", "terminated"]:
                 inst.start()
@@ -217,12 +219,13 @@ def launch_master(conn, opts):
                                min_count=1,
                                max_count=1,
                                block_device_map=block_map,
-                               user_data=get_user_data('bootstrap.py', '',
+                               user_data=get_user_data('bootstrap.sh', '',
                                                        master_type, opts.include_aws_key))
+        # If something goes wrong during initialization take a look at the servers' /var/log/cloud-init-output.log
         master_nodes = master_res.instances
-        print "Launched master in %s, regid = %s" % (opts.zone, master_res.id)
+        print("Launched master in %s, regid = %s" % (opts.zone, master_res.id))
 
-    print 'Waiting for master to getup...'
+    print('Waiting for master to getup...')
     ec2_util.wait_for_instances(conn, master_nodes)
 
     # Give the instances descriptive names
@@ -231,7 +234,7 @@ def launch_master(conn, opts):
             key='Name',
             value='{cn}-master-{iid}'.format(cn=cluster_name, iid=master.id))
     master = master_nodes[0].public_dns_name
-    print 'finishing getting master %s' % master
+    print('finishing getting master %s' % master)
     # Return all the instances
     return master_nodes
 
@@ -242,10 +245,10 @@ def launch_master(conn, opts):
 def launch_slaves(conn, opts):
     cluster_name = opts.cluster_name
     if opts.identity_file is None:
-        print >> sys.stderr, "ERROR: Must provide an identity file (-i) for ssh connections."
+        print("ERROR: Must provide an identity file (-i) for ssh connections.", file=sys.stderr)
         sys.exit(1)
     if opts.key_pair is None:
-        print >> sys.stderr, "ERROR: Must provide a key pair name (-k) to use on instances."
+        print("ERROR: Must provide a key pair name (-k) to use on instances.", file=sys.stderr)
         sys.exit(1)
     master_group = ec2_util.get_or_make_group(conn, cluster_name + "-master", False)
     slave_group = ec2_util.get_or_make_group(conn, cluster_name + "-slave", False)
@@ -253,18 +256,18 @@ def launch_slaves(conn, opts):
     existing_masters, existing_slaves = ec2_util.get_existing_cluster(conn, cluster_name,
                                                                       die_on_error=False)
     if len(existing_masters) == 0:
-        print >> stderr, ("ERROR: Cannot find master machine on group" +
-                          "group %s" % (master_group.name))
+        print(("ERROR: Cannot find master machine on group" +
+                          "group %s" % (master_group.name)), file=stderr)
         sys.exit(1)
 
     if opts.ami is None:
         opts.ami = get_ami(opts.instance_type)
-    print "Launching instances..."
+    print("Launching instances...")
 
     try:
         image = conn.get_all_images(image_ids=[opts.ami])[0]
     except:
-        print >> stderr, "Could not find AMI " + opts.ami
+        print("Could not find AMI " + opts.ami, file=stderr)
         sys.exit(1)
 
     master = existing_masters[0]
@@ -282,15 +285,15 @@ def launch_slaves(conn, opts):
                                                   opts.instance_type,
                                                   opts.include_aws_key))
     slave_nodes = slave_res.instances
-    print "Launched %d slaves in %s, regid = %s" % (len(slave_nodes),
-                                                    zone, slave_res.id)
-    print 'Waiting for slave to getup...'
+    print("Launched %d slaves in %s, regid = %s" % (len(slave_nodes),
+                                                    zone, slave_res.id))
+    print('Waiting for slave to getup...')
     ec2_util.wait_for_instances(conn, slave_nodes)
     for slave in slave_nodes:
         slave.add_tag(
             key='Name',
             value='{cn}-slave-{iid}'.format(cn=cluster_name, iid=slave.id))
-    print 'Done...'
+    print('Done...')
 
 # Launch slaves of a cluster of the given name, by setting up its security groups,
 # and then starting new instances in them.
@@ -300,14 +303,14 @@ def launch_spot_slaves(conn, opts):
     vcpu, vram, price = get_resource_map()
     cluster_name = opts.cluster_name
     if opts.identity_file is None:
-        print >> sys.stderr, "ERROR: Must provide an identity file (-i) for ssh connections."
+        print("ERROR: Must provide an identity file (-i) for ssh connections.", file=sys.stderr)
         sys.exit(1)
     if opts.spot_price is None:
         opts.spot_price = price[opts.instance_type]
-        print "Spot price is not specified, bid the full price=%g for %s" % (opts.spot_price, opts.instance_type)
+        print("Spot price is not specified, bid the full price=%g for %s" % (opts.spot_price, opts.instance_type))
 
     if opts.key_pair is None:
-        print >> sys.stderr, "ERROR: Must provide a key pair name (-k) to use on instances."
+        print("ERROR: Must provide a key pair name (-k) to use on instances.", file=sys.stderr)
         sys.exit(1)
 
     master_group = ec2_util.get_or_make_group(conn, cluster_name + "-master", False)
@@ -316,13 +319,13 @@ def launch_spot_slaves(conn, opts):
     existing_masters, existing_slaves = ec2_util.get_existing_cluster(conn, cluster_name,
                                                                       die_on_error=False)
     if len(existing_masters) == 0:
-        print >> stderr, ("ERROR: Cannot find master machine on group" +
-                          "group %s" % (master_group.name))
+        print(("ERROR: Cannot find master machine on group" +
+                          "group %s" % (master_group.name)), file=stderr)
         sys.exit(1)
 
     if opts.ami is None:
         opts.ami = get_ami(opts.instance_type)
-    print "Launching Spot instances type=%s, price=%g..." % (opts.instance_type, opts.spot_price)
+    print("Launching Spot instances type=%s, price=%g..." % (opts.instance_type, opts.spot_price))
 
     master = existing_masters[0]
     block_map = ec2_util.get_block_device(opts.instance_type, 0)
@@ -341,7 +344,7 @@ def launch_spot_slaves(conn, opts):
                                 master.private_dns_name,
                                 opts.instance_type,
                                 opts.include_aws_key))
-    print 'Done... request is submitted'
+    print('Done... request is submitted')
 
 def stringify_command(parts):
     if isinstance(parts, str):
@@ -377,8 +380,7 @@ def ssh(host, opts, command):
                         "--key-pair parameters and try again.".format(host))
                 else:
                     raise e
-            print >> sys.stderr, \
-                "Error executing remote command, retrying after 30 seconds: {0}".format(e)
+            print("Error executing remote command, retrying after 30 seconds: {0}".format(e), file=sys.stderr)
             time.sleep(30)
             tries = tries + 1
 
@@ -401,7 +403,7 @@ def main():
     try:
         conn = ec2.connect_to_region(opts.region)
     except Exception as e:
-        print >> sys.stderr, (e)
+        print((e), file=sys.stderr)
         sys.exit(1)
 
     if opts.zone == '':
@@ -418,7 +420,7 @@ def main():
         master_nodes = launch_spot_slaves(conn, opts)
     elif action == "get-master":
         (master_nodes, slave_nodes) = ec2_util.get_existing_cluster(conn, cluster_name)
-        print master_nodes[0].public_dns_name
+        print(master_nodes[0].public_dns_name)
     elif action == "login":
         (master_nodes, slave_nodes) = ec2_util.get_existing_cluster(conn, cluster_name)
         master = master_nodes[0].public_dns_name
@@ -430,7 +432,7 @@ def main():
         subprocess.check_call(
             ssh_command(opts)  + ['-D', '9595'] + ['-t', "%s@%s" % (opts.user, master)])
     else:
-        print >> sys.stderr, "Invalid action: %s" % action
+        print("Invalid action: %s" % action, file=sys.stderr)
         sys.exit(1)
 
 
